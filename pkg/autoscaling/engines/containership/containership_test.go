@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	cerebralv1alpha1 "github.com/containership/cerebral/pkg/apis/cerebral.containership.io/v1alpha1"
 )
 
 // fakeAutoscalingEngine creates a fake autoscaling engine that can be used for
@@ -22,8 +20,9 @@ func fakeAutoscalingEngine() *Engine {
 	}
 }
 
-func TestNewAutoscalingEngine(t *testing.T) {
-	_, err := NewAutoscalingEngine(cerebralv1alpha1.AutoscalingEngine{})
+func TestNewClient(t *testing.T) {
+	c := fakeAutoscalingEngine()
+	_, err := NewClient(c.name, c.config.Address, c.config.TokenEnvVarName, c.config.ClusterID, c.config.OrganizationID)
 	assert.Error(t, err)
 }
 
