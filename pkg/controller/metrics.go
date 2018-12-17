@@ -52,6 +52,9 @@ type MetricsController struct {
 	aspLister clisters.AutoscalingPolicyLister
 	aspSynced cache.InformerSynced
 
+	aseLister clisters.AutoscalingEngineLister
+	aseSynced cache.InformerSynced
+
 	workqueue workqueue.RateLimitingInterface
 
 	recorder record.EventRecorder
@@ -88,6 +91,7 @@ func NewMetrics(kubeclientset kubernetes.Interface,
 
 	asgInformer := cInformerFactory.Cerebral().V1alpha1().AutoscalingGroups()
 	aspInformer := cInformerFactory.Cerebral().V1alpha1().AutoscalingPolicies()
+	aseInformer := cInformerFactory.Cerebral().V1alpha1().AutoscalingEngines()
 
 	log.Infof("%s: setting up event handlers", metricsControllerName)
 
@@ -120,11 +124,27 @@ func NewMetrics(kubeclientset kubernetes.Interface,
 		DeleteFunc: c.enqueueASGsForAutoscalingPolicy,
 	})
 
+	aseInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: c.enqueueASGsForAutoscalingEngine,
+		UpdateFunc: func(old, new interface{}) {
+			newASE := new.(*cerebralv1alpha1.AutoscalingEngine)
+			oldASE := old.(*cerebralv1alpha1.AutoscalingEngine)
+			if newASE.ResourceVersion == oldASE.ResourceVersion {
+				return
+			}
+			c.enqueueASGsForAutoscalingEngine(new)
+		},
+		DeleteFunc: c.enqueueASGsForAutoscalingEngine,
+	})
+
 	c.asgLister = asgInformer.Lister()
 	c.asgSynced = asgInformer.Informer().HasSynced
 
 	c.aspLister = aspInformer.Lister()
 	c.aspSynced = aspInformer.Informer().HasSynced
+
+	c.aseLister = aseInformer.Lister()
+	c.aseSynced = aseInformer.Informer().HasSynced
 
 	return c
 }
@@ -140,7 +160,7 @@ func (c *MetricsController) Run(numWorkers int, stopCh <-chan struct{}) error {
 	// Start the informer factories to begin populating the informer caches
 	log.Infof("Starting %s", metricsControllerName)
 
-	if ok := cache.WaitForCacheSync(stopCh, c.asgSynced, c.aspSynced); !ok {
+	if ok := cache.WaitForCacheSync(stopCh, c.asgSynced, c.aspSynced, c.aseSynced); !ok {
 		return errors.Errorf("%s: failed to wait for caches to sync", metricsControllerName)
 	}
 
@@ -228,7 +248,7 @@ func (c *MetricsController) enqueueAutoscalingGroup(obj interface{}) {
 	c.workqueue.AddRateLimited(key)
 }
 
-// enqueueAutoscalingGroup enqueues all AutoscalingGroups for a given AutoscalingPolicy.
+// enqueueASGsForAutoscalingPolicy enqueues all AutoscalingGroups for a given AutoscalingPolicy.
 func (c *MetricsController) enqueueASGsForAutoscalingPolicy(obj interface{}) {
 	asp, ok := obj.(*cerebralv1alpha1.AutoscalingPolicy)
 	if !ok {
@@ -249,6 +269,29 @@ func (c *MetricsController) enqueueASGsForAutoscalingPolicy(obj interface{}) {
 			if p == asp.ObjectMeta.Name {
 				c.enqueueAutoscalingGroup(asg)
 			}
+		}
+	}
+}
+
+// enqueueASGsForAutoscalingEngine enqueues all AutoscalingGroups for a given AutoscalingEngine.
+func (c *MetricsController) enqueueASGsForAutoscalingEngine(obj interface{}) {
+	ase, ok := obj.(*cerebralv1alpha1.AutoscalingEngine)
+	if !ok {
+		log.Errorf("%s: unexpected type %T in call to enqueueASGsForAutoscalingEngine", metricsControllerName, obj)
+		return
+	}
+
+	log.Debugf("%s: finding ASGs to enqueue for event triggered on ASE %q", metricsControllerName, ase.ObjectMeta.Name)
+
+	asgs, err := c.asgLister.List(labels.NewSelector())
+	if err != nil {
+		log.Errorf("%s: error getting AutoscalingGroups when AutoscalingEngine was enqueued: %s", metricsControllerName, err)
+		return
+	}
+
+	for _, asg := range asgs {
+		if asg.Spec.Engine == ase.ObjectMeta.Name {
+			c.enqueueAutoscalingGroup(asg)
 		}
 	}
 }
@@ -304,6 +347,16 @@ func (c *MetricsController) syncHandler(key string) error {
 	if len(asps) == 0 {
 		log.Warnf("%s: No valid policies found for AutoscalingGroup %q - skipping", metricsControllerName, asgName)
 		return nil
+	}
+
+	_, err = c.aseLister.Get(asg.Spec.Engine)
+	if err != nil {
+		if kubeerrors.IsNotFound(err) {
+			log.Warnf("%s: No valid engines found for AutoscalingGroup %q - skipping", metricsControllerName, asgName)
+			return nil
+		} else {
+			return err
+		}
 	}
 
 	stopCh := make(chan struct{})
