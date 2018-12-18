@@ -29,7 +29,7 @@ func Registry() RegistryInterface {
 }
 
 // Get returns the Engine with the given name from the registry, or an error
-// if it does not exist. A Engine returned is not guaranteed to be valid
+// if it does not exist. An Engine returned is not guaranteed to be valid
 // still; it's assumed that the caller will handle Engine errors and delete it
 // from the Registry if appropriate.
 func (r *registry) Get(name string) (Engine, error) {
