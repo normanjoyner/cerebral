@@ -182,6 +182,7 @@ func (c *AutoscalingEngineController) enqueueAutoscalingEngine(obj interface{}) 
 		log.Error("Error enqueueing AutoscalingEngine: %s", err)
 		return
 	}
+
 	log.Debugf("%s: added %q to workqueue ", autoscalingEngineControllerName, key)
 	c.workqueue.AddRateLimited(key)
 }
@@ -216,10 +217,12 @@ func (c *AutoscalingEngineController) syncHandler(key string) error {
 	}
 
 	log.Infof("Instantiating engine client for AutoscalingEngine %q", name)
+
 	client, err := c.instantiateEngine(engine)
 	if err != nil {
 		return errors.Wrapf(err, "instantiating engine client for AutoscalingEngine %q", name)
 	}
+
 	autoscaling.Registry().Put(name, client)
 	log.Infof("Engine %q instantiated successfully", name)
 
@@ -231,33 +234,15 @@ func (c *AutoscalingEngineController) syncHandler(key string) error {
 func (c *AutoscalingEngineController) instantiateEngine(engine *cerebralv1alpha1.AutoscalingEngine) (autoscaling.Engine, error) {
 	switch engine.Spec.Type {
 	case "containership":
-		var name, address, tokenEnvVarName, clusterID, organizationID string
-		var ok bool
-
-		name = engine.Name
-
-		address, ok = engine.Spec.Configuration["address"]
-		if !ok {
-			return nil, errors.New("Containership engine requires address in configuration")
+		// Ignore defensive checks on engine property values since validation happens
+		// upon new client creation. We're explicitly not copying the name and configuration
+		// here since it is assumed that NewClient will not modify the parameters
+		cae, err := containership.NewClient(engine.Name, engine.Spec.Configuration)
+		if err != nil {
+			return nil, errors.Wrapf(err, "constructing new containership engine %q", engine.Name)
 		}
 
-		tokenEnvVarName, ok = engine.Spec.Configuration["tokenEnvVarName"]
-		if !ok {
-			return nil, errors.New("Containership engine requires tokenEnvVarName in configuration")
-		}
-
-		clusterID, ok = engine.Spec.Configuration["clusterID"]
-		if !ok {
-			return nil, errors.New("Containership engine requires clusterID in configuration")
-		}
-
-		organizationID, ok = engine.Spec.Configuration["organizationID"]
-		if !ok {
-			return nil, errors.New("Containership engine requires organizationID in configuration")
-		}
-
-		return containership.NewClient(name, address, tokenEnvVarName, clusterID, organizationID)
-
+		return cae, nil
 	default:
 		return nil, errors.Errorf("unknown engine type %q", engine.Spec.Type)
 	}
