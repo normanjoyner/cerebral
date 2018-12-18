@@ -124,16 +124,13 @@ func NewMetrics(kubeclientset kubernetes.Interface,
 		DeleteFunc: c.enqueueASGsForAutoscalingPolicy,
 	})
 
+	// Explicitly ignore AutoscalingEngine updates since we only care about
+	// starting poll managers when the AutoscalingEngine is added, and removing
+	// them when the AutoscalingEngine is deleted. Miscellaneous updates to engine
+	// configuration can be ignored, even when changing engine "type" since we can
+	// assume schema is valid, and have no reason to believe the scaling action will fail
 	aseInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: c.enqueueASGsForAutoscalingEngine,
-		UpdateFunc: func(old, new interface{}) {
-			newASE := new.(*cerebralv1alpha1.AutoscalingEngine)
-			oldASE := old.(*cerebralv1alpha1.AutoscalingEngine)
-			if newASE.ResourceVersion == oldASE.ResourceVersion {
-				return
-			}
-			c.enqueueASGsForAutoscalingEngine(new)
-		},
+		AddFunc:    c.enqueueASGsForAutoscalingEngine,
 		DeleteFunc: c.enqueueASGsForAutoscalingEngine,
 	})
 
@@ -354,9 +351,9 @@ func (c *MetricsController) syncHandler(key string) error {
 		if kubeerrors.IsNotFound(err) {
 			log.Warnf("%s: No valid engines found for AutoscalingGroup %q - skipping", metricsControllerName, asgName)
 			return nil
-		} else {
-			return err
 		}
+
+		return err
 	}
 
 	stopCh := make(chan struct{})
