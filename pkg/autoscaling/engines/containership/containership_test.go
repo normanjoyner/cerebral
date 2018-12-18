@@ -1,6 +1,7 @@
 package containership
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,9 +22,22 @@ func fakeAutoscalingEngine() *Engine {
 }
 
 func TestNewClient(t *testing.T) {
-	c := fakeAutoscalingEngine()
-	_, err := NewClient(c.name, c.config.Address, c.config.TokenEnvVarName, c.config.ClusterID, c.config.OrganizationID)
-	assert.Error(t, err)
+	name := "containership"
+	configuration := map[string]string{
+		"address":         "https://provision-test.containership.io",
+		"tokenEnvVarName": "TOKEN_ENV_VAR",
+		"organizationID":  "organization-uuid",
+		"clusterID":       "cluster-uuid",
+	}
+
+	c, err := NewClient(name, configuration)
+	assert.Error(t, err, "Testing that an error is returned when the token environment variable is not defined")
+
+	os.Setenv(configuration["tokenEnvVarName"], "token")
+	c, err = NewClient(name, configuration)
+	assert.Equal(t, nil, err, "Testing that error is nil when client is successfully created")
+	assert.NotEqual(t, nil, c, "Testing that client is not nil when successfully created")
+	os.Unsetenv(configuration["tokenEnvVarName"])
 }
 
 func TestName(t *testing.T) {
