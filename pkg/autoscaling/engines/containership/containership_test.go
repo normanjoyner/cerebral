@@ -35,8 +35,8 @@ func TestNewClient(t *testing.T) {
 
 	os.Setenv(configuration["tokenEnvVarName"], "token")
 	c, err = NewClient(name, configuration)
-	assert.Equal(t, nil, err, "Testing that error is nil when client is successfully created")
-	assert.NotEqual(t, nil, c, "Testing that client is not nil when successfully created")
+	assert.NoError(t, err, "Testing that no error is returned when client is successfully created")
+	assert.NotNil(t, c, "Testing that client is not nil when successfully created")
 	os.Unsetenv(configuration["tokenEnvVarName"])
 }
 
