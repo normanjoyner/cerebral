@@ -218,7 +218,7 @@ func (c *AutoscalingEngineController) syncHandler(key string) error {
 
 	log.Infof("Instantiating engine client for AutoscalingEngine %q", name)
 
-	client, err := c.instantiateEngine(engine)
+	client, err := instantiateEngine(engine)
 	if err != nil {
 		return errors.Wrapf(err, "instantiating engine client for AutoscalingEngine %q", name)
 	}
@@ -231,7 +231,7 @@ func (c *AutoscalingEngineController) syncHandler(key string) error {
 
 // insantiateEngine instantiates a new engine for the given AutoscalingEngine.
 // It should be the only function that knows how to instantiate a particular engine type.
-func (c *AutoscalingEngineController) instantiateEngine(engine *cerebralv1alpha1.AutoscalingEngine) (autoscaling.Engine, error) {
+func instantiateEngine(engine *cerebralv1alpha1.AutoscalingEngine) (autoscaling.Engine, error) {
 	switch engine.Spec.Type {
 	case "containership":
 		// Ignore defensive checks on engine property values since validation happens
