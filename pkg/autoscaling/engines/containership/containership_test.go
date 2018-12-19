@@ -1,7 +1,9 @@
 package containership
 
 import (
+	"fmt"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,7 +32,16 @@ func TestNewClient(t *testing.T) {
 		"clusterID":       "cluster-uuid",
 	}
 
-	c, err := NewClient(name, configuration)
+	copiedConfiguration := map[string]string{}
+
+	for key, value := range configuration {
+		copiedConfiguration[key] = value
+	}
+
+	c, err := NewClient(name, copiedConfiguration)
+	assert.True(t, reflect.DeepEqual(copiedConfiguration, configuration), "Testing that arguments are not modified")
+
+	c, err = NewClient(name, configuration)
 	assert.Error(t, err, "Testing that an error is returned when the token environment variable is not defined")
 
 	os.Setenv(configuration["tokenEnvVarName"], "token")
@@ -38,6 +49,14 @@ func TestNewClient(t *testing.T) {
 	assert.NoError(t, err, "Testing that no error is returned when client is successfully created")
 	assert.NotNil(t, c, "Testing that client is not nil when successfully created")
 	os.Unsetenv(configuration["tokenEnvVarName"])
+
+	for key := range configuration {
+		existingValue := configuration[key]
+		delete(configuration, key)
+		c, err = NewClient(name, configuration)
+		assert.Error(t, err, fmt.Sprintf("Testing that an error is returned when client configuration is missing %q", key))
+		configuration[key] = existingValue
+	}
 }
 
 func TestName(t *testing.T) {
