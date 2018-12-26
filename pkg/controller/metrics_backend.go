@@ -23,6 +23,7 @@ import (
 
 	"github.com/containership/cerebral/pkg/metrics"
 	"github.com/containership/cerebral/pkg/metrics/backends/influxdb"
+	k8smb "github.com/containership/cerebral/pkg/metrics/backends/kubernetes"
 	"github.com/containership/cerebral/pkg/metrics/backends/prometheus"
 
 	"github.com/pkg/errors"
@@ -252,6 +253,8 @@ func (c *MetricsBackendController) syncHandler(key string) error {
 // It should be the only function that knows how to instantiate a particular backend type.
 func (c *MetricsBackendController) instantiateBackend(backend *cerebralv1alpha1.MetricsBackend) (metrics.Backend, error) {
 	switch backend.Spec.Type {
+	case "kubernetes":
+		return k8smb.NewClient(c.nodeLister, c.podLister)
 	case "prometheus":
 		var address string
 		var ok bool
