@@ -124,6 +124,8 @@ func (b Backend) performQuery(db string, query string) (float64, error) {
 
 	if err != nil {
 		return 0, errors.Wrapf(err, "querying InfluxDB with string %q", query)
+	} else if res == nil {
+		return 0, errors.Errorf("querying InfluxDB with string %q returned nil", query)
 	} else if res.Error() != nil {
 		return 0, errors.Wrapf(res.Error(), "querying InfluxDB with string %q", query)
 	}

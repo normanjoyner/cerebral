@@ -1,6 +1,7 @@
 package influxdb
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -8,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	influxdbclient "github.com/influxdata/influxdb/client"
+	influxdbclient "github.com/influxdata/influxdb/client/v2"
 	"github.com/influxdata/influxdb/models"
 
 	"github.com/containership/cerebral/pkg/metrics/backends/influxdb/mocks"
@@ -49,7 +50,7 @@ func TestNewClient(t *testing.T) {
 	assert.NotNil(t, client)
 	assert.NoError(t, err, "any valid URL is ok")
 
-	client, err = NewClient("", corelistersv1.NewNodeLister(nil))
+	_, err = NewClient("", corelistersv1.NewNodeLister(nil))
 	assert.Error(t, err, "error on empty URL")
 
 	_, err = NewClient(validURL, nil)
@@ -71,26 +72,26 @@ func TestGetValue(t *testing.T) {
 
 	_, err := backend.GetValue("cpu_percent_utilization", goodConfiguration, nil)
 	assert.Error(t, err, "error when InfluxDB errors")
-	/*
-		// Return unexpected nil
-		mockInfluxDB.On("Query", mock.Anything).
-			Return(nil, nil).Once()
 
-		_, err = backend.GetValue("cpu_percent_utilization", goodConfiguration, nil)
-		assert.Error(t, err, "error on nil result")
+	// Return unexpected nil
+	mockInfluxDB.On("Query", mock.Anything).
+		Return(nil, nil).Once()
 
-			// Return unexpected non-Vector type
-			mockInfluxDB.On("Query", mock.Anything, mock.Anything, mock.Anything).
-				Return(&model.Scalar{}, nil).Once()
+	_, err = backend.GetValue("cpu_percent_utilization", goodConfiguration, nil)
+	assert.Error(t, err, "error on nil result")
 
-			_, err = backend.GetValue("cpu_percent_utilization", goodConfiguration, nil)
-			assert.Error(t, err, "error on non-vector result")
+	// Return unexpected non-Vector type
+	mockInfluxDB.On("Query", mock.Anything, mock.Anything, mock.Anything).
+		Return(&influxdbclient.Response{
+			Err: "Influxdb error response",
+		}, nil).Once()
 
-	*/
+	_, err = backend.GetValue("cpu_percent_utilization", goodConfiguration, nil)
+	assert.Error(t, err, "error on query response")
 
 	// Return single element vector as expected
 	mockInfluxDB.On("Query", mock.Anything).
-		Return(influxdbclient.Response{
+		Return(&influxdbclient.Response{
 			Results: []influxdbclient.Result{
 				{
 					Series: []models.Row{
@@ -98,7 +99,7 @@ func TestGetValue(t *testing.T) {
 							Name:    "cpu",
 							Columns: []string{"time", "cpu_percent_utilization"},
 							Values: [][]interface{}{
-								{"2018-12-25T16:12:06.249608977Z", "36.555302259839486"},
+								{"2018-12-25T16:12:06.249608977Z", json.Number("36.555302259839486")},
 							},
 						},
 					},
