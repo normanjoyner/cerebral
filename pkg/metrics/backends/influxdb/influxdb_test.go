@@ -89,6 +89,15 @@ func TestGetValue(t *testing.T) {
 	_, err = backend.GetValue("cpu_percent_utilization", goodConfiguration, nil)
 	assert.Error(t, err, "error on query response")
 
+	// Return unexpected non-Vector type
+	mockInfluxDB.On("Query", mock.Anything, mock.Anything, mock.Anything).
+		Return(&influxdbclient.Response{
+			Results: []influxdbclient.Result{},
+		}, nil).Once()
+
+	_, err = backend.GetValue("cpu_percent_utilization", goodConfiguration, nil)
+	assert.Error(t, err, "error on empty results response")
+
 	// Return single element vector as expected
 	mockInfluxDB.On("Query", mock.Anything).
 		Return(&influxdbclient.Response{
@@ -109,6 +118,54 @@ func TestGetValue(t *testing.T) {
 
 	_, err = backend.GetValue("cpu_percent_utilization", goodConfiguration, nil)
 	assert.NoError(t, err, "single element vector is ok")
+
+	// Return single element vector as expected
+	mockInfluxDB.On("Query", mock.Anything).
+		Return(&influxdbclient.Response{
+			Results: []influxdbclient.Result{
+				{
+					Series: []models.Row{
+						{
+							Name:    "memory",
+							Columns: []string{"time", "memory_percent_utilization"},
+							Values: [][]interface{}{
+								{"2018-12-25T16:12:06.249608977Z", json.Number("36.555302259839486")},
+							},
+						},
+					},
+				},
+			},
+		}, nil).Once()
+
+	_, err = backend.GetValue("memory_percent_utilization", goodConfiguration, nil)
+	assert.NoError(t, err, "single element vector is ok")
+
+	// Return single element vector as expected
+	mockInfluxDB.On("Query", mock.Anything).
+		Return(&influxdbclient.Response{
+			Results: []influxdbclient.Result{
+				{
+					Series: []models.Row{
+						{
+							Name:    "disc",
+							Columns: []string{"time", "disc"},
+							Values: [][]interface{}{
+								{"2018-12-25T16:12:06.249608977Z", json.Number("40")},
+							},
+						},
+					},
+				},
+			},
+		}, nil).Once()
+
+	_, err = backend.GetValue("custom", goodCustomQueryConfiguration, nil)
+	assert.NoError(t, err, "single element vector is ok")
+
+	_, err = backend.GetValue("unknown", goodConfiguration, nil)
+	assert.Error(t, err)
+
+	_, err = backend.GetValue("cpu_percent_utilization", badAggregationConfiguration, nil)
+	assert.Error(t, err)
 }
 
 func TestBuildCPUQuery(t *testing.T) {
