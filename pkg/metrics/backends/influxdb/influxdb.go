@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 
 	influxdbclient "github.com/influxdata/influxdb/client/v2"
+	"github.com/influxdata/influxdb/models"
 
 	corelistersv1 "k8s.io/client-go/listers/core/v1"
 
@@ -128,12 +129,26 @@ func (b Backend) performQuery(db string, query string) (float64, error) {
 		return 0, errors.Errorf("querying InfluxDB with string %q returned nil", query)
 	} else if res.Error() != nil {
 		return 0, errors.Wrapf(res.Error(), "querying InfluxDB with string %q", query)
+	} else if len(res.Results) != 1 {
+		return 0, errors.New("querying InfluxDB return an unexpected number of results")
 	}
 
-	result, err := res.Results[0].Series[0].Values[0][1].(json.Number).Float64()
-	if err != nil {
-		return 0, err
+	var result float64
+	switch v := interface{}(res.Results[0].Series).(type) {
+	case []models.Row:
+		if len(v) != 1 || len(v[0].Values) != 1 {
+			return 0, errors.Errorf("expected Series to have a single value element but it has %d", len(v[0].Values))
+		}
+
+		result, err = v[0].Values[0][1].(json.Number).Float64()
+		if err != nil {
+			return 0, err
+		}
+
+	default:
+		return 0, errors.Errorf("unexpected InfluxDB value type %T: %#v", v, v)
 	}
+
 	return result, nil
 }
 
